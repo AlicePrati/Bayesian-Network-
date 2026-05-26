@@ -26,35 +26,26 @@ On Windows, if `Rscript` is not in PATH, use the full path:
 
 This produces:
 - Console output replicating **Table 15.2** (sequential evidence updates and their effect on `clark_guilty`)
-- `figure_15_12_replica.pdf` and `figure_15_12_replica.png` — visual replica of Figure 15.12
+- `figure_15_12_replication.pdf` and `figure_15_12_replication.png` — visual replica of Figure 15.12
 
 ## Architecture
 
 All logic lives in `BN.R`, structured in three sequential parts:
 
 **Part 1 — Bayesian Network (`gRain`)**  
-Eight CPTs are defined and compiled into a `grain` object. The key dependency structure is:
+Eight named CPTs are compiled into a `grain` object called `bn`. The key dependency structure is:
 - `cause_A` → `cause_B` (sibling dependence: SIDS risk in B is conditioned on A's cause)
-- `cause_A`, `cause_B` → `findings` (3-state aggregation node: Neither/Either/Both murdered)
+- `cause_A`, `cause_B` → `findings` (deterministic 3-state node: Neither/Either/Both murdered)
 - `findings` → `clark_guilty`
-- `cause_A` → `bruising_A`, `disease_A` (and symmetric for B)
+- `cause_A` → `bruising_A`, `disease_A` (and symmetric for B, sharing `prob_bruising`/`prob_disease`)
+
+`prior` holds the unconditional marginals queried from `bn` before any evidence is set.
 
 **Part 2 — Table 15.2**  
-Sequential calls to `setEvidence()` accumulate observations one at a time (bruising_A → disease_A → bruising_B → disease_B), querying `clark_guilty["Yes"]` after each step.
+Sequential `setEvidence()` calls on `bn` accumulate trial observations (`bn_1` → `bn_2` → `bn_3` → `bn_4`), querying `clark_guilty["Yes"]` after each step.
 
 **Part 3 — Figure 15.12**  
-Pure `ggplot2` drawing. Node positions, widths, and heights are defined in the `node_info` data frame (coordinates in a 0–26.5 × 1.2–17.2 canvas). `build_bars()` computes bar geometry from prior probabilities queried live from the network — no hardcoded values.
-
-## Code comments (thesis context)
-
-Comments in `BN.R` should explain the **why**, not the what. Key spots that warrant a comment:
-- Above `p_bruising`/`p_disease`: source is Fenton & Neil Table 15.1; values are symmetric across children by design
-- Above `cptable(~cause_B | cause_A, ...)`: sibling dependence — family history of SIDS raises prior for second child
-- Above `cptable(~findings | ...)`: deterministic node, fully determined by cause combination
-- Above `prior <- querygrain(...)`: unconditional (prior) query, no evidence set
-- Above the `setEvidence` chain: cumulative evidence updates replicating Table 15.2
-- Above `node_info`: canvas coordinate system (x: 0–26.5, y: 1.2–17.2); cx/cy are centres, W/H are half-dimensions
-- Above `border_pt`: geometric helper so arrows connect at node edges, not centres
+Pure `ggplot2` drawing. `node_info` defines node positions on a 0–26.5 × 1.2–17.2 canvas (`cx`/`cy` = centre, `W`/`H` = half-dimensions). `build_bars()` converts prior probabilities into bar coordinates. `border_point()` computes arrow endpoints at node edges. All probability values come from `prior` — nothing is hardcoded.
 
 ## Reference values (Fenton & Neil 2018, Table 15.2)
 
