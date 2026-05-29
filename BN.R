@@ -1,18 +1,10 @@
-# ============================================================
 # Bayesian Network replication — Sally Clark case
-# Source: Fenton & Neil (2018), Chapter 15
-# Figure 15.12 and Table 15.2
-# ============================================================
-
+# Source: Fenton & Neil (2018), Chapter 15 Figure 15.12 and Table 15.2
 library(gRain)   # Bayesian network inference
 library(ggplot2) # plotting
-
 setwd("c:/Users/alice/Documents/tesi R")
 
-
-# ------------------------------------------------------------
-# PART 1: BUILDING THE BAYESIAN NETWORK
-# ------------------------------------------------------------
+# PART 1: THE BAYESIAN NETWORK
 
 # Conditional probabilities of symptoms given cause of death
 # (from Table 15.1 in Fenton & Neil 2018)
@@ -20,8 +12,6 @@ setwd("c:/Users/alice/Documents/tesi R")
 
 prob_bruising <- c(0.98988, 0.01012, 0.95177, 0.04823)
 prob_disease  <- c(0.950, 0.050, 0.9984, 0.0016)
-
-# --- Network nodes ---
 
 # Cause of death of child A (root node, no parents)
 # Prior: 92.17% SIDS, 7.83% murder
@@ -38,7 +28,6 @@ cpt_cause_B <- cptable(~cause_B | cause_A,
                         levels = c("SIDS", "Murder"))
 
 # The "findings" node summarises the combination of the two causes
-# It is deterministic: once both causes are known, the outcome is certain
 cpt_findings <- cptable(~findings | cause_A:cause_B,
                          values = c(1, 0, 0,   # SIDS   + SIDS   -> neither murdered
                                     0, 1, 0,   # SIDS   + Murder -> either murdered
@@ -46,8 +35,6 @@ cpt_findings <- cptable(~findings | cause_A:cause_B,
                                     0, 0, 1),  # Murder + Murder -> both murdered
                          levels = c("Neither_murdered", "Either_murdered", "Both_murdered"))
 
-# Clark's guilt follows directly from findings
-# She is guilty if and only if at least one child was murdered
 cpt_guilty <- cptable(~clark_guilty | findings,
                        values = c(1, 0,   # neither murdered -> not guilty
                                   0, 1,   # either murdered  -> guilty
@@ -74,7 +61,6 @@ cpt_disease_B <- cptable(~disease_B | cause_B,
                           values = prob_disease,
                           levels = c("no", "yes"))
 
-# --- Compile and build the network ---
 bn <- grain(compileCPT(list(
   cpt_cause_A,
   cpt_cause_B,
@@ -86,18 +72,12 @@ bn <- grain(compileCPT(list(
   cpt_disease_B
 )))
 
-# Query the prior marginals (no evidence entered yet)
 prior <- querygrain(bn, nodes = c(
   "cause_A", "cause_B", "findings", "clark_guilty",
   "bruising_A", "disease_A", "bruising_B", "disease_B"
 ))
 
-
-# ------------------------------------------------------------
-# PART 2: TABLE 15.2 — cumulative evidence update
-# ------------------------------------------------------------
-# Each step conditions the network on one additional piece of
-# trial evidence and re-queries P(clark_guilty = Yes)
+# PART 2: TABLE 15.2 
 
 # No evidence
 p0 <- prior$clark_guilty["Yes"] * 100
@@ -139,10 +119,7 @@ for (row in rows) {
 }
 cat(strrep("=", 68), "\n\n")
 
-
-# ------------------------------------------------------------
 # PART 3: FIGURE 15.12 — network visualisation
-# ------------------------------------------------------------
 
 # Collect prior probabilities for each node in a ggplot-friendly format
 node_probs <- list(
@@ -168,7 +145,6 @@ node_probs <- list(
                                    prior$clark_guilty["Yes"]) * 100)
 )
 
-# Position and size of each node in the plot (cx, cy = centre; W, H = half-width/height)
 node_info <- data.frame(
   id    = c("bruising_A", "disease_A", "cause_A", "cause_B",
             "bruising_B", "disease_B", "findings", "clark_guilty"),
@@ -188,16 +164,15 @@ node_info <- data.frame(
   stringsAsFactors = FALSE
 )
 
-# Compute the coordinates of the probability bars inside each node box
 build_bars <- function(node_id) {
   nd      <- node_info[node_info$id == node_id, ]
   dat     <- node_probs[[node_id]]
   n_states <- nrow(dat)
 
-  title_h  <- 0.40                          # height reserved for node title
-  free_h   <- 2 * nd$H - title_h           # remaining height for bars
-  step     <- free_h / (n_states + 0.30)   # vertical spacing between bars
-  bar_hh   <- step * 0.37                  # half-height of each bar
+  title_h  <- 0.40                          
+  free_h   <- 2 * nd$H - title_h           
+  step     <- free_h / (n_states + 0.30)   
+  bar_hh   <- step * 0.37                  
   top_y    <- nd$cy + nd$H - title_h - step * 0.65
   bar_cy   <- top_y - (0:(n_states - 1)) * step
 
@@ -229,7 +204,7 @@ build_bars <- function(node_id) {
 
 df_bars <- do.call(rbind, lapply(node_info$id, build_bars))
 
-# Build the shaded background rectangles grouping nodes into sections
+# Build rectangles grouping nodes into sections
 make_section <- function(section_label, xmin, xmax, node_ids) {
   nds  <- node_info[node_info$id %in% node_ids, ]
   ymax <- max(nds$cy + nds$H) + 0.72
@@ -247,7 +222,7 @@ sections <- rbind(
   make_section("Conclusions",         8.7, 17.3, c("findings", "clark_guilty"))
 )
 
-# Directed edges of the network
+# Directed edges
 edges_raw <- list(
   c("cause_A", "cause_B"),
   c("cause_A", "bruising_A"), c("cause_A", "disease_A"),
@@ -256,8 +231,6 @@ edges_raw <- list(
   c("findings", "clark_guilty")
 )
 
-# Find the point on the border of a rectangle in a given direction
-# so that arrows start/end at the node boundary rather than its centre
 border_point <- function(cx, cy, W, H, dx, dy) {
   n <- sqrt(dx^2 + dy^2)
   if (n < 1e-9) return(c(cx, cy))
@@ -278,10 +251,9 @@ df_edges <- do.call(rbind, lapply(edges_raw, function(e) {
   data.frame(xs = p0[1], ys = p0[2], xe = p1[1], ye = p1[2])
 }))
 
-# --- Build the figure ---
+#the figure
 fig <- ggplot() +
 
-  # Shaded section backgrounds
   geom_rect(data = sections,
             aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
             fill = "#F2F2F2", colour = "#AAAAAA", linewidth = 0.35) +
@@ -290,45 +262,38 @@ fig <- ggplot() +
             hjust = 0, vjust = 1, size = 5.5,
             fontface = "italic", colour = "#333333") +
 
-  # Directed edges (arrows)
   geom_segment(data = df_edges,
                aes(x = xs, y = ys, xend = xe, yend = ye),
                colour = "#777777", linewidth = 0.55,
                arrow = arrow(length = unit(0.17, "cm"), type = "closed")) +
 
-  # Node boxes
+
   geom_rect(data = node_info,
             aes(xmin = cx - W, xmax = cx + W, ymin = cy - H, ymax = cy + H),
             fill = "white", colour = "black", linewidth = 0.45) +
 
-  # Separator line between node title and probability bars
   geom_segment(data = node_info,
                aes(x = cx - W, xend = cx + W,
                    y = cy + H - 0.40, yend = cy + H - 0.40),
                colour = "#CCCCCC", linewidth = 0.25) +
 
-  # Node title labels
-  geom_text(data = node_info,
+geom_text(data = node_info,
             aes(x = cx, y = cy + H - 0.20, label = label),
             hjust = 0.5, vjust = 0.5, size = 5.0,
             fontface = "bold", colour = "#111111") +
 
-  # Light grey background of each bar (represents 100%)
-  geom_rect(data = df_bars,
+geom_rect(data = df_bars,
             aes(xmin = bg_x0, xmax = bg_x1, ymin = ymin, ymax = ymax),
             fill = "#D5D5D5", colour = NA) +
 
-  # Dark bar proportional to probability
   geom_rect(data = df_bars,
             aes(xmin = bar_x0, xmax = bar_x1, ymin = ymin, ymax = ymax),
             fill = "#555555", colour = NA) +
 
-  # State labels (e.g. "No", "Yes", "SIDS")
   geom_text(data = df_bars,
             aes(x = lbl_x, y = bar_cy, label = state),
             hjust = 0, vjust = 0.5, size = 4.0, colour = "#111111") +
 
-  # Percentage values to the right of each bar
   geom_text(data = df_bars,
             aes(x = x_pct, y = bar_cy, label = sprintf("%.2f%%", p)),
             hjust = 0, vjust = 0.5, size = 4.0, colour = "#111111") +
@@ -350,11 +315,8 @@ fig <- ggplot() +
 
 print(fig)
 
-# Save output files
 ggsave("figure_15_12_replication.pdf", fig, width = 17, height = 11, device = "pdf")
 ggsave("figure_15_12_replication.png", fig, width = 17, height = 11, dpi = 600)
-
-# EMF = vector format for Word (scales without quality loss)
 win.metafile("figure_15_12_replication.emf", width = 17, height = 11)
 print(fig)
 dev.off()
